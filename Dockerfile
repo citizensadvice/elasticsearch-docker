@@ -52,3 +52,7 @@ COPY docker-entrypoint.sh /
 EXPOSE 9200 9300
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["elasticsearch"]
+
+RUN plugin install mobz/elasticsearch-head
+RUN plugin install royrusso/elasticsearch-HQ/v2.0.3
+RUN plugin install polyfractal/elasticsearch-inquisitor
