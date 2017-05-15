@@ -1,39 +1,53 @@
-FROM openjdk:8-jre
+FROM openjdk:8-jre-alpine
 
-# grab gosu for easy step-down from root
-ENV GOSU_VERSION 1.7
-RUN set -x \
-	&& wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
-	&& wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
-	&& export GNUPGHOME="$(mktemp -d)" \
-	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-	&& gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-	&& rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
-	&& chmod +x /usr/local/bin/gosu \
-	&& gosu nobody true
+# ensure elasticsearch user exists
+RUN addgroup -S elasticsearch && adduser -S -G elasticsearch elasticsearch
 
-# https://packages.elasticsearch.org/GPG-KEY-elasticsearch
-RUN apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys 46095ACC8548582C1A2699A9D27D666CD88E42B4
+# grab su-exec for easy step-down from root
+# and bash for "bin/elasticsearch" among others
+RUN apk add --no-cache 'su-exec>=0.2' bash
 
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-repositories.html
-# https://www.elastic.co/guide/en/elasticsearch/reference/5.0/deb.html
-RUN set -x \
-	&& apt-get update && apt-get install -y --no-install-recommends apt-transport-https && rm -rf /var/lib/apt/lists/* \
-	&& echo 'deb http://packages.elasticsearch.org/elasticsearch/2.x/debian stable main' > /etc/apt/sources.list.d/elasticsearch.list
-
-ENV ELASTICSEARCH_VERSION 2.3.2
-
-RUN set -x \
-	&& apt-get update \
-	&& apt-get install -y --no-install-recommends elasticsearch=$ELASTICSEARCH_VERSION \
-	&& rm -rf /var/lib/apt/lists/*
-
-ENV PATH /usr/share/elasticsearch/bin:$PATH
+# https://artifacts.elastic.co/GPG-KEY-elasticsearch
+ENV GPG_KEY 46095ACC8548582C1A2699A9D27D666CD88E42B4
 
 WORKDIR /usr/share/elasticsearch
+ENV PATH /usr/share/elasticsearch/bin:$PATH
 
-RUN set -ex \
-	&& for path in \
+ENV ELASTICSEARCH_VERSION 5.1.2
+ENV ELASTICSEARCH_TARBALL="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.1.2.tar.gz" \
+	ELASTICSEARCH_TARBALL_ASC="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.1.2.tar.gz.asc" \
+	ELASTICSEARCH_TARBALL_SHA1="ae3d5b0d631a61e72b88f930b3cc9f8475a766d6"
+
+RUN set -ex; \
+	\
+	apk add --no-cache --virtual .fetch-deps \
+		ca-certificates \
+		gnupg \
+		openssl \
+		tar \
+	; \
+	\
+	wget -O elasticsearch.tar.gz "$ELASTICSEARCH_TARBALL"; \
+	\
+	if [ "$ELASTICSEARCH_TARBALL_SHA1" ]; then \
+		echo "$ELASTICSEARCH_TARBALL_SHA1 *elasticsearch.tar.gz" | sha1sum -c -; \
+	fi; \
+	\
+	if [ "$ELASTICSEARCH_TARBALL_ASC" ]; then \
+		wget -O elasticsearch.tar.gz.asc "$ELASTICSEARCH_TARBALL_ASC"; \
+		export GNUPGHOME="$(mktemp -d)"; \
+		gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$GPG_KEY"; \
+		gpg --batch --verify elasticsearch.tar.gz.asc elasticsearch.tar.gz; \
+		rm -r "$GNUPGHOME" elasticsearch.tar.gz.asc; \
+	fi; \
+	\
+	tar -xf elasticsearch.tar.gz --strip-components=1; \
+	rm elasticsearch.tar.gz; \
+	\
+	apk del .fetch-deps; \
+	\
+	mkdir -p ./plugins; \
+	for path in \
 		./data \
 		./logs \
 		./config \
@@ -41,7 +55,15 @@ RUN set -ex \
 	; do \
 		mkdir -p "$path"; \
 		chown -R elasticsearch:elasticsearch "$path"; \
-	done
+	done; \
+	\
+	if [ "${ELASTICSEARCH_VERSION%%.*}" -gt 1 ]; then \
+		elasticsearch --version; \
+	else \
+# elasticsearch 1.x doesn't support --version
+# but in 5.x, "-v" is verbose (and "-V" is --version)
+		elasticsearch -v; \
+	fi
 
 COPY config ./config
 
@@ -52,7 +74,3 @@ COPY docker-entrypoint.sh /
 EXPOSE 9200 9300
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["elasticsearch"]
-
-RUN plugin install mobz/elasticsearch-head
-RUN plugin install royrusso/elasticsearch-HQ/v2.0.3
-RUN plugin install polyfractal/elasticsearch-inquisitor
