@@ -16,7 +16,7 @@ ENV PATH /usr/share/elasticsearch/bin:$PATH
 ENV ELASTICSEARCH_VERSION 6.2.4
 ENV ELASTICSEARCH_TARBALL="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.2.4.tar.gz" \
 	ELASTICSEARCH_TARBALL_ASC="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.2.4.tar.gz.asc" \
-	ELASTICSEARCH_TARBALL_SHA1="341b4a3f6b29eded039b62547f7894e5de2983c9"
+	ELASTICSEARCH_TARBALL_SHA1="8db5931278fd7a8687659ebcfaeab0d0f87f7d22"
 
 RUN set -ex; \
 	\
