@@ -2,6 +2,9 @@
 
 set -e
 
+# setup the tmp directory
+export ES_TMPDIR=`mktemp -d -t elasticsearch.XXXXXXXX`
+
 # Add elasticsearch as command if needed
 if [ "${1:0:1}" = '-' ]; then
 	set -- elasticsearch "$@"
