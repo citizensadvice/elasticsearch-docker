@@ -1,11 +1,7 @@
-FROM openjdk:8-jre-alpine
+FROM openjdk:11-jre-slim
 
 # ensure elasticsearch user exists
-RUN addgroup -S elasticsearch && adduser -S -G elasticsearch elasticsearch
-
-# grab su-exec for easy step-down from root
-# and bash for "bin/elasticsearch" among others
-RUN apk add --no-cache 'su-exec>=0.2' bash
+RUN addgroup --system elasticsearch && adduser --system --ingroup elasticsearch elasticsearch
 
 # https://artifacts.elastic.co/GPG-KEY-elasticsearch
 ENV GPG_KEY 46095ACC8548582C1A2699A9D27D666CD88E42B4
@@ -18,17 +14,12 @@ ENV ELASTICSEARCH_TARBALL="https://artifacts.elastic.co/downloads/elasticsearch/
 	ELASTICSEARCH_TARBALL_ASC="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.4.2-linux-x86_64.tar.gz.asc" \
 	ELASTICSEARCH_TARBALL_SHA512="64cc3e77f4271a5477c8c979fa48728d96890cad68b0daac6566f4dda25b4d4a80784eaafeaa874a6b434c034fcacb8a5751fdb445919191bae4aa4958c793b7"
 
+RUN apt-get update && apt-get install -y --no-install-recommends gosu
+RUN apt-get install -y --no-install-recommends wget
+RUN wget -O elasticsearch.tar.gz "$ELASTICSEARCH_TARBALL"
+RUN apt-get install -y --no-install-recommends gpg dirmngr gpg-agent
+
 RUN set -ex; \
-	\
-	apk add --no-cache --virtual .fetch-deps \
-		ca-certificates \
-		gnupg \
-		openssl \
-		tar \
-	; \
-	\
-	wget -O elasticsearch.tar.gz "$ELASTICSEARCH_TARBALL"; \
-	\
 	if [ "$ELASTICSEARCH_TARBALL_SHA512" ]; then \
 		echo "$ELASTICSEARCH_TARBALL_SHA512 *elasticsearch.tar.gz" | sha512sum -c -; \
 	fi; \
@@ -46,7 +37,8 @@ RUN set -ex; \
 	tar -xf elasticsearch.tar.gz --strip-components=1; \
 	rm elasticsearch.tar.gz; \
 	\
-	apk del .fetch-deps; \
+	apt-get purge -y gpg dirmngr gpg-agent wget; \
+	apt-get clean; \
 	\
 	mkdir -p ./plugins; \
 	for path in \
