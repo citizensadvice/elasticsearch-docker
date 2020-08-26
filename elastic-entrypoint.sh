@@ -30,7 +30,7 @@ fi
 
 # Add elasticsearch as command if needed
 if [ "${1:0:1}" = '-' ]; then
-	set -- elasticsearch "$@"
+	set -- elasticsearch "$@" ${es_opts}
 fi
 
 # Drop root privileges if we are running elasticsearch
